@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Refund Letter Generator</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>Refund Letter Generator</h1>
+      <p>Get the compensation you deserve for airline or hotel issues</p>
+    </header>
+
+    <div class="form-container">
+      <form id="refundForm">
+        <div class="form-group">
+          <label for="fullName">Full Name</label>
+          <input type="text" id="fullName" name="fullName" required>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" required>
+        </div>
+
+        <div class="form-group">
+          <label for="companyName">Airline or Hotel Name</label>
+          <input type="text" id="companyName" name="companyName" required>
+        </div>
+
+        <div class="form-group">
+          <label for="bookingNumber">Booking or Ticket Number</label>
+          <input type="text" id="bookingNumber" name="bookingNumber" required>
+        </div>
+
+        <div class="form-group">
+          <label for="date">Date of Travel or Stay</label>
+          <input type="date" id="date" name="date" required>
+        </div>
+
+        <div class="form-group">
+          <label for="issueType">Type of Issue</label>
+          <select id="issueType" name="issueType" required>
+            <option value="">Select an issue</option>
+            <option value="Delay">Delay</option>
+            <option value="Cancellation">Cancellation</option>
+            <option value="Overbooking">Overbooking</option>
+            <option value="Bad Service">Bad Service</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Short Description of the Problem</label>
+          <textarea id="description" name="description" rows="4" required></textarea>
+        </div>
+
+        <div class="button-group">
+          <button type="button" id="generateFree" class="btn free-btn">Generate Free Letter</button>
+          <button type="button" id="generatePremium" class="btn premium-btn">Get Premium Letter ($4.99)</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="letterContainer" class="letter-container hidden">
+      <h2>Your Refund Request Letter</h2>
+      <div id="generatedLetter" class="letter-content"></div>
+      <button id="copyLetter" class="btn copy-btn">Copy Letter</button>
+    </div>
+
+    <div id="paymentModal" class="modal hidden">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Premium Letter Processing</h2>
+        <p>For just $4.99, you'll receive:</p>
+        <ul>
+          <li>Professionally-worded, legally optimized letter</li>
+          <li>PDF download option</li>
+          <li>Email delivery</li>
+          <li>References to relevant US DOT/FTC regulations</li>
+        </ul>
+        <div id="paymentElement">
+          <!-- Stripe payment element will be inserted here -->
+        </div>
+        <button id="submitPayment" class="btn premium-btn">Pay $4.99</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="script.js"></script>
+</body>
+
+</html>
