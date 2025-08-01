@@ -1,55 +1,110 @@
+
 <?php
 header('Content-Type: application/json');
 
 // Get the POST data
 $data = json_decode(file_get_contents('php://input'), true);
 
-// Validate required fields
-$requiredFields = ['fullName', 'email', 'companyName', 'bookingNumber', 'date', 'issueType', 'description'];
-foreach ($requiredFields as $field) {
-    if (empty($data[$field])) {
-        echo json_encode(['success' => false, 'error' => "Field $field is required"]);
-        exit;
-    }
+if (!$data) {
+    echo json_encode(['success' => false, 'error' => 'No data received']);
+    exit;
 }
 
-// Prepare the prompt for OpenAI
-$isPremium = isset($data['isPremium']) && $data['isPremium'];
-$prompt = "Write a professional refund request letter for a " . $data['issueType'] . " issue with " . $data['companyName'] . ".\n\n";
-$prompt .= "Details:\n";
+$isPremium = isset($data['isPremium']) ? $data['isPremium'] : false;
+
+// OpenAI API configuration
+$openai_api_key = 'YOUR_OPENAI_API_KEY_HERE'; // Replace with your actual API key
+
+// Build the prompt
+$prompt = "Generate a professional refund request letter for the following situation:\n\n";
 $prompt .= "Customer Name: " . $data['fullName'] . "\n";
-$prompt .= "Booking/Ticket Number: " . $data['bookingNumber'] . "\n";
-$prompt .= "Date of Travel/Stay: " . $data['date'] . "\n";
-$prompt .= "Issue Description: " . $data['description'] . "\n\n";
+$prompt .= "Company: " . $data['companyName'] . "\n";
+$prompt .= "Booking Number: " . $data['bookingNumber'] . "\n";
+$prompt .= "Date: " . $data['date'] . "\n";
+$prompt .= "Issue Type: " . $data['issueType'] . "\n";
+$prompt .= "Description: " . $data['description'] . "\n\n";
 
 if ($isPremium) {
-    $prompt .= "Include references to relevant US DOT and FTC regulations that support this refund request. ";
+    $prompt .= "This is a PREMIUM letter. Include references to relevant US DOT and FTC regulations that support this refund request. ";
     $prompt .= "The tone should be firm but polite, and optimized for maximum chance of approval. ";
-    $prompt .= "Structure the letter professionally with clear paragraphs and a formal closing.";
+    $prompt .= "Structure the letter professionally with clear paragraphs and a formal closing. ";
+    $prompt .= "Include specific compensation amounts and legal precedents where applicable.";
 } else {
-    $prompt .= "Write a concise but effective letter requesting a refund or compensation. ";
-    $prompt .= "Use a polite but firm tone and structure it properly.";
+    $prompt .= "This is a FREE letter. Write a concise but effective letter requesting a refund or compensation. ";
+    $prompt .= "Use a polite but firm tone and structure it properly. Keep it brief but professional.";
 }
 
-// For demo purposes, we'll generate a letter without OpenAI API
-// You can replace this with your working OpenAI API key when available
+$prompt .= "\n\nGenerate only the body content of the letter (no date, addresses, or signature - those will be added separately).";
 
-// Generate a professional letter template
-$letter = generateLetterTemplate($data, $isPremium);
+// Try to use OpenAI API
+$letter_content = '';
+if ($openai_api_key && $openai_api_key !== 'YOUR_OPENAI_API_KEY_HERE') {
+    $letter_content = generateWithOpenAI($prompt, $openai_api_key);
+}
+
+// Fallback to template if OpenAI fails or no API key
+if (!$letter_content) {
+    $letter_content = generateLetterTemplate($data, $isPremium);
+}
 
 // Add header and signature
-$formattedLetter = "Date: " . date('Y-m-d') . "\n\n";
+$formattedLetter = "Date: " . date('F j, Y') . "\n\n";
 $formattedLetter .= $data['fullName'] . "\n";
 $formattedLetter .= $data['email'] . "\n\n";
-$formattedLetter .= "To: Customer Service\n";
+$formattedLetter .= "To: Customer Service Department\n";
 $formattedLetter .= $data['companyName'] . "\n\n";
 $formattedLetter .= "Subject: Refund Request for Booking " . $data['bookingNumber'] . "\n\n";
 $formattedLetter .= "Dear Customer Service Team,\n\n";
-$formattedLetter .= $letter . "\n\n";
+$formattedLetter .= $letter_content . "\n\n";
 $formattedLetter .= "Sincerely,\n";
-$formattedLetter .= $data['fullName'] . "\n";
+$formattedLetter .= $data['fullName'];
 
 echo json_encode(['success' => true, 'letter' => $formattedLetter]);
+
+function generateWithOpenAI($prompt, $api_key) {
+    $url = 'https://api.openai.com/v1/chat/completions';
+    
+    $data = [
+        'model' => 'gpt-4',
+        'messages' => [
+            [
+                'role' => 'system',
+                'content' => 'You are a professional legal writer specializing in consumer rights and refund requests.'
+            ],
+            [
+                'role' => 'user',
+                'content' => $prompt
+            ]
+        ],
+        'max_tokens' => 1000,
+        'temperature' => 0.7
+    ];
+
+    $headers = [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $api_key
+    ];
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($http_code === 200) {
+        $result = json_decode($response, true);
+        if (isset($result['choices'][0]['message']['content'])) {
+            return trim($result['choices'][0]['message']['content']);
+        }
+    }
+
+    return false;
+}
 
 function generateLetterTemplate($data, $isPremium) {
     $issueType = strtolower($data['issueType']);
@@ -66,21 +121,17 @@ function generateLetterTemplate($data, $isPremium) {
         $letter .= "I respectfully request:\n";
         $letter .= "1. Full refund of the booking amount\n";
         $letter .= "2. Compensation for additional expenses incurred\n";
-        $letter .= "3. Written confirmation of the refund process\n\n";
+        $letter .= "3. Written confirmation of the refund process and timeline\n\n";
         
-        $letter .= "I look forward to your prompt response within 7 business days. Should this matter not be resolved satisfactorily, I will be compelled to escalate this complaint to the appropriate regulatory authorities.\n\n";
-        
-        $letter .= "Thank you for your immediate attention to this matter.";
+        $letter .= "I trust that you will handle this matter promptly and in accordance with applicable consumer protection regulations. I look forward to your swift response within 7 business days.";
     } else {
-        $letter = "I am writing to request a refund for my booking (Reference: " . $data['bookingNumber'] . ") due to a " . $data['issueType'] . " that occurred on " . $data['date'] . ".\n\n";
+        $letter = "I am writing to request a refund for my booking (Reference: " . $data['bookingNumber'] . ") due to a " . $data['issueType'] . " on " . $data['date'] . ".\n\n";
         
-        $letter .= "Issue Details:\n" . $data['description'] . "\n\n";
+        $letter .= "The issue I experienced was: " . $data['description'] . "\n\n";
         
-        $letter .= "This situation has caused significant inconvenience and I believe a refund is appropriate given the circumstances. I have always been satisfied with your services and hope we can resolve this matter quickly.\n\n";
+        $letter .= "This situation caused significant inconvenience and I believe I am entitled to a full refund. I would appreciate your prompt attention to this matter.\n\n";
         
-        $letter .= "I would appreciate a full refund of my booking amount and look forward to your response.\n\n";
-        
-        $letter .= "Thank you for your time and consideration.";
+        $letter .= "Please process my refund request and confirm the timeline for completion. I look forward to your response.";
     }
     
     return $letter;
