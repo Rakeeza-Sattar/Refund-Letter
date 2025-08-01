@@ -13,7 +13,7 @@ if (!$data) {
 $isPremium = isset($data['isPremium']) ? $data['isPremium'] : false;
 
 // OpenAI API configuration
-$openai_api_key = 'YOUR_OPENAI_API_KEY_HERE'; // Replace with your actual API key
+$openai_api_key = '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'; // Replace with your actual API key
 
 // Build the prompt
 $prompt = "Generate a professional refund request letter for the following situation:\n\n";

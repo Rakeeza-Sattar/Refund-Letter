@@ -1,0 +1,4 @@
+[01-Aug-2025 18:52:14 Europe/Berlin] PHP Warning:  mail(): Failed to connect to mailserver at &quot;localhost&quot; port 25, verify your &quot;SMTP&quot; and &quot;smtp_port&quot; setting in php.ini or use ini_set() in D:\xampp\htdocs\refund\premium_processing.php on line 148
+[01-Aug-2025 18:52:14 Europe/Berlin] Failed to send email to: rakeezasattar53@gmail.com
+[01-Aug-2025 19:03:18 Europe/Berlin] PHP Warning:  mail(): Failed to connect to mailserver at &quot;localhost&quot; port 25, verify your &quot;SMTP&quot; and &quot;smtp_port&quot; setting in php.ini or use ini_set() in D:\xampp\htdocs\refund\premium_processing.php on line 148
+[01-Aug-2025 19:03:18 Europe/Berlin] Failed to send email to: rakeezasattar53@gmail.com

@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const closeModal = document.querySelector('.close');
     let submitPaymentBtn = document.getElementById('submitPayment');
 
-    // Initialize Stripe (using live key for production)
+    // Initialize Stripe
     const stripe = Stripe('pk_test_51Rp5gMBjRGtHSh35i942Hbb4gqHAT21HJ1B4lba7UHJKlB4kDHTwcaL8jRksGRiFf7yHugV5TdP1GAwnLDaX6aXR00d0ErIHAw');
     let elements;
 
@@ -159,20 +159,11 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: Server error`);
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
             
-            const responseText = await response.text();
-            console.log('Server response:', responseText);
-            
-            let data;
-            try {
-                data = JSON.parse(responseText);
-            } catch (parseError) {
-                console.error('JSON parse error:', parseError);
-                console.error('Response was:', responseText);
-                throw new Error('Invalid response from server. Please try again.');
-            }
+            const data = await response.json();
             
             if (data.error) {
                 throw new Error(data.error);
