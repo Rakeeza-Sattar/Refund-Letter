@@ -31,63 +31,58 @@ if ($isPremium) {
     $prompt .= "Use a polite but firm tone and structure it properly.";
 }
 
-// Call OpenAI API
-$openai_api_key = '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';
-$url = 'https://api.openai.com/v1/chat/completions';
+// For demo purposes, we'll generate a letter without OpenAI API
+// You can replace this with your working OpenAI API key when available
 
-$headers = [
-    'Content-Type: application/json',
-    'Authorization: Bearer ' . $openai_api_key
-];
+// Generate a professional letter template
+$letter = generateLetterTemplate($data, $isPremium);
 
-$postData = [
-    'model' => 'gpt-4.1-mini',
-    'messages' => [
-        [
-            'role' => 'system',
-            'content' => 'You are a helpful assistant that generates professional refund request letters for airline and hotel issues.'
-        ],
-        [
-            'role' => 'user',
-            'content' => $prompt
-        ]
-    ],
-    'temperature' => 0.7,
-    'max_tokens' => 1000
-];
+// Add header and signature
+$formattedLetter = "Date: " . date('Y-m-d') . "\n\n";
+$formattedLetter .= $data['fullName'] . "\n";
+$formattedLetter .= $data['email'] . "\n\n";
+$formattedLetter .= "To: Customer Service\n";
+$formattedLetter .= $data['companyName'] . "\n\n";
+$formattedLetter .= "Subject: Refund Request for Booking " . $data['bookingNumber'] . "\n\n";
+$formattedLetter .= "Dear Customer Service Team,\n\n";
+$formattedLetter .= $letter . "\n\n";
+$formattedLetter .= "Sincerely,\n";
+$formattedLetter .= $data['fullName'] . "\n";
 
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $url);
-curl_setopt($ch, CURLOPT_POST, 1);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+echo json_encode(['success' => true, 'letter' => $formattedLetter]);
 
-$response = curl_exec($ch);
-curl_close($ch);
-
-$responseData = json_decode($response, true);
-
-if (isset($responseData['choices'][0]['message']['content'])) {
-    $letter = $responseData['choices'][0]['message']['content'];
+function generateLetterTemplate($data, $isPremium) {
+    $issueType = strtolower($data['issueType']);
     
-    // Format the letter with proper line breaks
-    $letter = str_replace("\n", "\n\n", $letter);
+    if ($isPremium) {
+        $letter = "I am writing to formally request a full refund for my recent booking (Reference: " . $data['bookingNumber'] . ") due to a " . $data['issueType'] . " that occurred on " . $data['date'] . ".\n\n";
+        
+        $letter .= "Issue Details:\n" . $data['description'] . "\n\n";
+        
+        $letter .= "According to the U.S. Department of Transportation (DOT) regulations, specifically 14 CFR Part 250 and 14 CFR Part 259, passengers are entitled to compensation for significant delays and cancellations. Additionally, the Federal Trade Commission (FTC) guidelines on fair business practices support consumer rights to refunds when services are not delivered as promised.\n\n";
+        
+        $letter .= "I have been a loyal customer and believe this situation warrants immediate attention and full compensation. The inconvenience caused has resulted in additional expenses and significant disruption to my travel plans.\n\n";
+        
+        $letter .= "I respectfully request:\n";
+        $letter .= "1. Full refund of the booking amount\n";
+        $letter .= "2. Compensation for additional expenses incurred\n";
+        $letter .= "3. Written confirmation of the refund process\n\n";
+        
+        $letter .= "I look forward to your prompt response within 7 business days. Should this matter not be resolved satisfactorily, I will be compelled to escalate this complaint to the appropriate regulatory authorities.\n\n";
+        
+        $letter .= "Thank you for your immediate attention to this matter.";
+    } else {
+        $letter = "I am writing to request a refund for my booking (Reference: " . $data['bookingNumber'] . ") due to a " . $data['issueType'] . " that occurred on " . $data['date'] . ".\n\n";
+        
+        $letter .= "Issue Details:\n" . $data['description'] . "\n\n";
+        
+        $letter .= "This situation has caused significant inconvenience and I believe a refund is appropriate given the circumstances. I have always been satisfied with your services and hope we can resolve this matter quickly.\n\n";
+        
+        $letter .= "I would appreciate a full refund of my booking amount and look forward to your response.\n\n";
+        
+        $letter .= "Thank you for your time and consideration.";
+    }
     
-    // Add header and signature
-    $formattedLetter = "Date: " . date('Y-m-d') . "\n\n";
-    $formattedLetter .= $data['fullName'] . "\n";
-    $formattedLetter .= $data['email'] . "\n\n";
-    $formattedLetter .= "To: Customer Service\n";
-    $formattedLetter .= $data['companyName'] . "\n\n";
-    $formattedLetter .= "Subject: Refund Request for Booking " . $data['bookingNumber'] . "\n\n";
-    $formattedLetter .= "Dear Customer Service Team,\n\n";
-    $formattedLetter .= $letter . "\n\n";
-    $formattedLetter .= "Sincerely,\n";
-    $formattedLetter .= $data['fullName'] . "\n";
-    
-    echo json_encode(['success' => true, 'letter' => $formattedLetter]);
-} else {
-    echo json_encode(['success' => false, 'error' => 'Failed to generate letter']);
+    return $letter;
 }
 ?>

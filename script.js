@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const copyLetterBtn = document.getElementById('copyLetter');
     const paymentModal = document.getElementById('paymentModal');
     const closeModal = document.querySelector('.close');
-    const submitPaymentBtn = document.getElementById('submitPayment');
+    let submitPaymentBtn = document.getElementById('submitPayment');
 
     // Initialize Stripe
     const stripe = Stripe('pk_live_51Rp5gFBpnow2VOeaQvZlUau13AhA7L48stK8qf7puDCRHeff0HraLiD9HXtafgE3TNknE9AX0kFnJ5a9900C2EEC003btzB7FZ');
@@ -40,6 +40,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // Close modal
     closeModal.addEventListener('click', function () {
         paymentModal.classList.add('hidden');
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', function(event) {
+        if (event.target === paymentModal) {
+            paymentModal.classList.add('hidden');
+        }
     });
 
     // Copy letter to clipboard
@@ -88,9 +95,32 @@ document.addEventListener('DOMContentLoaded', function () {
                     letterContainer.classList.remove('hidden');
 
                     if (isPremium) {
-                        paymentModal.classList.add('hidden');
-                        // In a real app, you would send the email and PDF here
-                        alert('Premium letter generated! Check your email for the PDF.');
+                        // Process premium features (email + PDF)
+                        fetch('premium_processing.php', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                email: requestData.email,
+                                fullName: requestData.fullName,
+                                letter: data.letter
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(premiumData => {
+                            paymentModal.classList.add('hidden');
+                            if (premiumData.success) {
+                                alert('Premium letter generated and sent to your email with PDF attachment!');
+                            } else {
+                                alert('Letter generated but failed to send email: ' + premiumData.error);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Premium processing error:', error);
+                            paymentModal.classList.add('hidden');
+                            alert('Letter generated but premium processing failed. Please contact support.');
+                        });
                     }
                 } else {
                     alert('Error generating letter: ' + data.error);
@@ -112,36 +142,92 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Initialize Stripe payment
-    function initializePayment() {
-        // Create payment elements
-        elements = stripe.elements();
-        const paymentElement = elements.create('payment');
-        paymentElement.mount('#paymentElement');
+    async function initializePayment() {
+        try {
+            // Clear any existing payment element first
+            const paymentElementContainer = document.getElementById('paymentElement');
+            if (paymentElementContainer) {
+                paymentElementContainer.innerHTML = '';
+            }
 
-        // Handle form submission
-        submitPaymentBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-
-            submitPaymentBtn.disabled = true;
-            submitPaymentBtn.textContent = 'Processing...';
-
-            const { error } = await stripe.confirmPayment({
-                elements,
-                confirmParams: {
-                    return_url: window.location.href,
+            // Create payment intent
+            const response = await fetch('create_payment_intent.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
                 },
             });
-
-            if (error) {
-                alert(error.message);
-                submitPaymentBtn.disabled = false;
-                submitPaymentBtn.textContent = 'Pay $4.99';
-            } else {
-                // Payment succeeded - generate premium letter
-                const formData = new FormData(refundForm);
-                const data = Object.fromEntries(formData.entries());
-                generateLetter(data, true);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
-        });
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            if (!data.clientSecret) {
+                throw new Error('No client secret received from server');
+            }
+
+            // Create payment elements with client secret
+            elements = stripe.elements({ 
+                clientSecret: data.clientSecret,
+                appearance: {
+                    theme: 'stripe'
+                }
+            });
+            
+            const paymentElement = elements.create('payment', {
+                layout: 'tabs'
+            });
+            
+            // Wait a bit before mounting to ensure DOM is ready
+            setTimeout(() => {
+                paymentElement.mount('#paymentElement');
+            }, 100);
+
+            // Handle form submission - remove any existing listeners first
+            const newSubmitBtn = submitPaymentBtn.cloneNode(true);
+            submitPaymentBtn.parentNode.replaceChild(newSubmitBtn, submitPaymentBtn);
+            submitPaymentBtn = newSubmitBtn; // Update global reference
+            
+            newSubmitBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+
+                newSubmitBtn.disabled = true;
+                newSubmitBtn.textContent = 'Processing...';
+
+                try {
+                    const { error } = await stripe.confirmPayment({
+                        elements,
+                        confirmParams: {
+                            return_url: window.location.href.split('?')[0],
+                        },
+                        redirect: 'if_required'
+                    });
+
+                    if (error) {
+                        throw new Error(error.message);
+                    } else {
+                        // Payment succeeded - generate premium letter
+                        const formData = new FormData(refundForm);
+                        const letterData = Object.fromEntries(formData.entries());
+                        generateLetter(letterData, true);
+                    }
+                } catch (paymentError) {
+                    console.error('Payment error:', paymentError);
+                    alert('Payment failed: ' + paymentError.message);
+                    newSubmitBtn.disabled = false;
+                    newSubmitBtn.textContent = 'Pay $4.99';
+                }
+            });
+        } catch (error) {
+            console.error('Error initializing payment:', error);
+            alert('Error setting up payment: ' + error.message + '. Please try again.');
+        }
     }
 });

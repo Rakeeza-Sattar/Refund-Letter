@@ -84,10 +84,13 @@
           <li>Email delivery</li>
           <li>References to relevant US DOT/FTC regulations</li>
         </ul>
-        <div id="paymentElement">
-          <!-- Stripe payment element will be inserted here -->
+        <div id="payment-form">
+          <div id="paymentElement">
+            <!-- Stripe payment element will be inserted here -->
+          </div>
+          <div id="payment-errors" role="alert" style="color: red; margin-top: 10px;"></div>
+          <button id="submitPayment" class="btn premium-btn" style="margin-top: 20px;">Pay $4.99</button>
         </div>
-        <button id="submitPayment" class="btn premium-btn">Pay $4.99</button>
       </div>
     </div>
   </div>
