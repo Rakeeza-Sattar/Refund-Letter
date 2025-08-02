@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -197,7 +196,12 @@
         <div id="generatedLetter" class="letter-content"></div>
         <div class="letter-actions">
           <button id="copyLetter" class="btn copy-btn">📋 Copy Letter</button>
-          <button id="downloadPdf" class="btn download-btn hidden">📄 Download PDF</button>
+          <button id="downloadPdf" class="btn download-btn hidden" onclick="downloadPDF()">
+                        📄 Download PDF
+                    </button>
+                    <button id="shareEmail" class="share-btn hidden" onclick="shareViaEmail()">
+                        📧 Share via Email
+                    </button>
         </div>
       </div>
     </div>
@@ -211,7 +215,7 @@
         <h2>Premium Letter Processing</h2>
         <p>Unlock the full power of professional refund letters</p>
       </div>
-      
+
       <div class="premium-benefits">
         <div class="benefit">
           <span class="benefit-icon">⚖️</span>

@@ -114,16 +114,25 @@ function generateLetterTemplate($data, $isPremium) {
         
         $letter .= "Issue Details:\n" . $data['description'] . "\n\n";
         
-        $letter .= "According to the U.S. Department of Transportation (DOT) regulations, specifically 14 CFR Part 250 and 14 CFR Part 259, passengers are entitled to compensation for significant delays and cancellations. Additionally, the Federal Trade Commission (FTC) guidelines on fair business practices support consumer rights to refunds when services are not delivered as promised.\n\n";
+        $letter .= "LEGAL BASIS FOR REFUND REQUEST:\n";
+        $letter .= "According to the U.S. Department of Transportation (DOT) regulations, specifically 14 CFR Part 250 (Oversales) and 14 CFR Part 259 (Tarmac Delays), passengers are entitled to compensation for significant delays and cancellations. Additionally, the Federal Trade Commission (FTC) guidelines under 15 U.S.C. §45 on fair business practices support consumer rights to refunds when services are not delivered as promised.\n\n";
         
-        $letter .= "I have been a loyal customer and believe this situation warrants immediate attention and full compensation. The inconvenience caused has resulted in additional expenses and significant disruption to my travel plans.\n\n";
+        $letter .= "Furthermore, under the Consumer Protection Act and various state consumer protection laws, I am entitled to receive the service I paid for or receive a full refund. The failure to provide the promised service constitutes a breach of contract and unfair business practices.\n\n";
         
-        $letter .= "I respectfully request:\n";
-        $letter .= "1. Full refund of the booking amount\n";
+        $letter .= "IMPACT AND DAMAGES:\n";
+        $letter .= "This situation has caused significant inconvenience, financial loss, and disruption to my travel plans. As a loyal customer, I believe this situation warrants immediate attention and full compensation in accordance with industry standards and legal requirements.\n\n";
+        
+        $letter .= "FORMAL REQUEST:\n";
+        $letter .= "I respectfully demand:\n";
+        $letter .= "1. Full refund of the booking amount ($" . (isset($data['amount']) ? $data['amount'] : '[AMOUNT]') . ")\n";
         $letter .= "2. Compensation for additional expenses incurred\n";
-        $letter .= "3. Written confirmation of the refund process and timeline\n\n";
+        $letter .= "3. Written confirmation of the refund process and timeline\n";
+        $letter .= "4. Acknowledgment of this complaint within 48 hours\n\n";
         
-        $letter .= "I trust that you will handle this matter promptly and in accordance with applicable consumer protection regulations. I look forward to your swift response within 7 business days.";
+        $letter .= "LEGAL NOTICE:\n";
+        $letter .= "Please be advised that failure to respond appropriately to this request may result in filing a complaint with the appropriate regulatory authorities and pursuing additional legal remedies available under consumer protection laws.\n\n";
+        
+        $letter .= "I trust that you will handle this matter promptly and in accordance with applicable consumer protection regulations. I expect your response within 7 business days as required by federal guidelines.";
     } else {
         $letter = "I am writing to request a refund for my booking (Reference: " . $data['bookingNumber'] . ") due to a " . $data['issueType'] . " on " . $data['date'] . ".\n\n";
         
