@@ -1,24 +1,53 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const refundForm = document.getElementById('refundForm');
+    // DOM Elements
+    const serviceTypeSelect = document.getElementById('serviceType');
+    const airlineFields = document.getElementById('airlineFields');
+    const hotelFields = document.getElementById('hotelFields');
     const generateFreeBtn = document.getElementById('generateFree');
     const generatePremiumBtn = document.getElementById('generatePremium');
+    const refundForm = document.getElementById('refundForm');
     const letterContainer = document.getElementById('letterContainer');
     const generatedLetter = document.getElementById('generatedLetter');
     const copyLetterBtn = document.getElementById('copyLetter');
     const paymentModal = document.getElementById('paymentModal');
     const closeModal = document.querySelector('.close');
-    let submitPaymentBtn = document.getElementById('submitPayment');
+    const paymentLoader = document.getElementById('paymentLoader');
+    let submitPaymentBtn = document.getElementById('submitPayment'); // Keep original reference for initial setup
 
-    // Service type conditional logic
-    const serviceTypeSelect = document.getElementById('serviceType');
-    const airlineFields = document.getElementById('airlineFields');
-    const hotelFields = document.getElementById('hotelFields');
-    const premiumFields = document.querySelectorAll('.premium-field input, .premium-field select');
+    // Toast notification system
+    function showToast(message, type = 'success') {
+        // Remove existing toasts
+        const existingToasts = document.querySelectorAll('.toast');
+        existingToasts.forEach(toast => toast.remove());
 
-    // Initialize premium fields as disabled for free users
-    premiumFields.forEach(field => {
-        field.disabled = true;
-    });
+        // Create new toast
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.2rem;">
+                    ${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}
+                </span>
+                <span>${message}</span>
+            </div>
+        `;
+
+        document.body.appendChild(toast);
+
+        // Show toast
+        setTimeout(() => toast.classList.add('show'), 100);
+
+        // Hide toast after 4 seconds
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    // Initialize Stripe (replace with your publishable key)
+    const stripe = Stripe('pk_test_51QalRGGINHU4Ss6HTiLVBSMQPRXV5sG8j4UQqB0Pr1sO7ktqK4X8zJ8r5I0dUNqAx5RJP34o3ORWkdxsjAZeLLPX00dNzlmRRX');
+    let elements;
+    let paymentElement;
 
     // Handle service type changes
     serviceTypeSelect.addEventListener('change', function () {
@@ -28,21 +57,17 @@ document.addEventListener('DOMContentLoaded', function () {
         airlineFields.classList.add('hidden');
         hotelFields.classList.add('hidden');
 
-        // Clear required attributes
-        document.getElementById('flightDate').required = false;
-        document.getElementById('checkinDate').required = false;
-
         // Show relevant fields based on selection
         if (selectedType === 'Airline') {
-            setTimeout(() => {
-                airlineFields.classList.remove('hidden');
-                document.getElementById('flightDate').required = true;
-            }, 300);
+            airlineFields.classList.remove('hidden');
+            // Make flight date required
+            document.getElementById('flightDate').required = true;
+            document.getElementById('checkinDate').required = false;
         } else if (selectedType === 'Hotel') {
-            setTimeout(() => {
-                hotelFields.classList.remove('hidden');
-                document.getElementById('checkinDate').required = true;
-            }, 300);
+            hotelFields.classList.remove('hidden');
+            // Make checkin date required
+            document.getElementById('checkinDate').required = true;
+            document.getElementById('flightDate').required = false;
         }
 
         // Update company name placeholder
@@ -56,142 +81,91 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Initialize Stripe
-    const stripe = Stripe('pk_test_51Rp5gMBjRGtHSh35i942Hbb4gqHAT21HJ1B4lba7UHJKlB4kDHTwcaL8jRksGRiFf7yHugV5TdP1GAwnLDaX6aXR00d0ErIHAw');
-    let elements;
-
-    // Generate free letter
-    generateFreeBtn.addEventListener('click', function () {
-        if (!validateForm(false)) {
-            return;
-        }
-
-        const data = collectFormData(false);
-        generateLetter(data, false);
-    });
-
-    // Generate premium letter - show payment modal
-    generatePremiumBtn.addEventListener('click', function () {
-        if (!validateForm(true)) {
-            return;
-        }
-
-        // Enable premium fields temporarily for validation
-        premiumFields.forEach(field => {
-            field.disabled = false;
-        });
-
-        paymentModal.classList.remove('hidden');
-        initializePayment();
-    });
-
-    // Close modal
-    closeModal.addEventListener('click', function () {
-        paymentModal.classList.add('hidden');
-    });
-
-    // Close modal when clicking outside
-    window.addEventListener('click', function (event) {
-        if (event.target === paymentModal) {
-            paymentModal.classList.add('hidden');
-        }
-    });
-
     // Form validation function
-    function validateForm(isPremium) {
+    function validateForm(isPremium = false) {
+        const requiredFields = [
+            'fullName', 'email', 'serviceType', 'companyName',
+            'bookingNumber', 'issueType', 'description'
+        ];
+
         const serviceType = document.getElementById('serviceType').value;
-
-        if (!serviceType) {
-            alert('Please select a service type (Airline or Hotel)');
-            return false;
-        }
-
-        // Validate basic required fields
-        if (!refundForm.checkValidity()) {
-            refundForm.reportValidity();
-            return false;
-        }
-
-        // Validate conditional required fields
         if (serviceType === 'Airline') {
-            const flightDate = document.getElementById('flightDate').value;
-            if (!flightDate) {
-                alert('Please enter the flight date');
-                return false;
-            }
+            requiredFields.push('flightDate');
         } else if (serviceType === 'Hotel') {
-            const checkinDate = document.getElementById('checkinDate').value;
-            if (!checkinDate) {
-                alert('Please enter the check-in date');
+            requiredFields.push('checkinDate');
+        }
+
+        for (const fieldId of requiredFields) {
+            const field = document.getElementById(fieldId);
+            if (!field || !field.value.trim()) {
+                const label = field ? field.previousElementSibling : null;
+                const labelText = label ? label.textContent.replace('*', '').trim() : fieldId;
+                showToast(`Please fill in ${labelText}`, 'error');
+                if (field) field.focus();
                 return false;
             }
+        }
+
+        // Email validation
+        const email = document.getElementById('email').value;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            showToast('Please enter a valid email address', 'error');
+            document.getElementById('email').focus();
+            return false;
         }
 
         return true;
     }
 
     // Collect form data function
-    function collectFormData(isPremium) {
-        const formData = new FormData(refundForm);
-        let data = Object.fromEntries(formData.entries());
+    function collectFormData(isPremium = false) {
+        const serviceType = document.getElementById('serviceType').value;
 
-        // Add service type info
-        data.serviceType = document.getElementById('serviceType').value;
+        const data = {
+            fullName: document.getElementById('fullName').value.trim(),
+            email: document.getElementById('email').value.trim(),
+            serviceType: serviceType,
+            companyName: document.getElementById('companyName').value.trim(),
+            bookingNumber: document.getElementById('bookingNumber').value.trim(),
+            issueType: document.getElementById('issueType').value,
+            description: document.getElementById('description').value.trim()
+        };
 
-        // Only include relevant fields based on service type
-        if (data.serviceType === 'Airline') {
-            data.date = data.flightDate;
-            // Remove hotel-specific fields
-            delete data.checkinDate;
-            delete data.nightsStayed;
-            delete data.hotelLoyaltyNumber;
-        } else if (data.serviceType === 'Hotel') {
-            data.date = data.checkinDate;
-            // Remove airline-specific fields
-            delete data.flightDate;
-            delete data.departureCity;
-            delete data.arrivalCity;
-            delete data.loyaltyNumber;
+        // Add service-specific fields
+        if (serviceType === 'Airline') {
+            data.date = document.getElementById('flightDate').value;
+            data.departureCity = document.getElementById('departureCity').value.trim();
+            data.arrivalCity = document.getElementById('arrivalCity').value.trim();
+            if (isPremium) {
+                data.loyaltyNumber = document.getElementById('loyaltyNumber').value.trim();
+            }
+        } else if (serviceType === 'Hotel') {
+            data.date = document.getElementById('checkinDate').value;
+            data.nightsStayed = document.getElementById('nightsStayed').value;
+            if (isPremium) {
+                data.hotelLoyaltyNumber = document.getElementById('hotelLoyaltyNumber').value.trim();
+                data.reservationPlatform = document.getElementById('reservationPlatform').value.trim();
+            }
         }
 
-        // Only include premium fields if this is a premium request
-        if (!isPremium) {
-            delete data.desiredOutcome;
-            delete data.generalPlatform;
-            delete data.reservationPlatform;
-            delete data.loyaltyNumber;
-            delete data.hotelLoyaltyNumber;
-            delete data.departureCity;
-            delete data.arrivalCity;
+        // Add premium fields
+        if (isPremium) {
+            data.desiredOutcome = document.getElementById('desiredOutcome').value;
+            data.generalPlatform = document.getElementById('generalPlatform').value.trim();
         }
 
         return data;
     }
 
-    // Copy letter to clipboard
-    copyLetterBtn.addEventListener('click', function () {
-        navigator.clipboard.writeText(generatedLetter.textContent)
-            .then(() => {
-                copyLetterBtn.textContent = 'Copied!';
-                setTimeout(() => {
-                    copyLetterBtn.textContent = 'Copy Letter';
-                }, 2000);
-            })
-            .catch(err => {
-                console.error('Failed to copy: ', err);
-            });
-    });
-
     // Generate letter using AI
-    function generateLetter(data, isPremium) {
+    function generateLetter(data, isPremium = false) {
+        const button = isPremium ? submitPaymentBtn : generateFreeBtn;
+        const originalText = button.textContent;
+
         // Show loading state
-        if (isPremium) {
-            submitPaymentBtn.disabled = true;
-            submitPaymentBtn.textContent = 'Generating Letter...';
-        } else {
-            generateFreeBtn.disabled = true;
-            generateFreeBtn.textContent = 'Generating...';
-        }
+        button.disabled = true;
+        button.textContent = isPremium ? 'Generating Letter...' : 'Generating...';
 
         // Prepare the data to send to the server
         const requestData = {
@@ -207,73 +181,70 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify(requestData)
         })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     generatedLetter.textContent = data.letter;
                     letterContainer.classList.remove('hidden');
 
+                    // Show appropriate download/share buttons for premium
                     if (isPremium) {
-                        // Process premium features (email + PDF)
-                        fetch('premium_processing.php', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                email: requestData.email,
-                                fullName: requestData.fullName,
-                                letter: data.letter
-                            })
-                        })
-                            .then(response => response.json())
-                            .then(premiumData => {
-                                paymentModal.classList.add('hidden');
-                                if (premiumData.success) {
-                                    // Show success toast
-                                    showSuccessToast('✅ Premium letter generated and sent to your email with PDF attachment!');
-                                    // Show PDF download button
-                                    document.getElementById('downloadPdf').classList.remove('hidden');
-                                    // Show email sharing button
-                                    document.getElementById('shareEmail').classList.remove('hidden');
-                                    // Add premium styling to letter
-                                    document.getElementById('generatedLetter').parentElement.classList.add('premium-letter');
-                                } else {
-                                    showErrorToast('⚠️ Letter generated but email delivery failed: ' + premiumData.error);
-                                    // Still show PDF button since premium was paid
-                                    document.getElementById('downloadPdf').classList.remove('hidden');
-                                    // Show email sharing button
-                                    document.getElementById('shareEmail').classList.remove('hidden');
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Premium processing error:', error);
-                                paymentModal.classList.add('hidden');
-                                showErrorToast('❌ Letter generated but premium processing failed. Please contact support.');
-                                // Still show PDF button since payment was successful
-                                document.getElementById('downloadPdf').classList.remove('hidden');
-                                // Show email sharing button
-                                document.getElementById('shareEmail').classList.remove('hidden');
-                            });
+                        document.getElementById('downloadPdf').classList.remove('hidden');
+                        document.getElementById('shareEmail').classList.remove('hidden');
+                    }
+
+                    // Scroll to letter
+                    letterContainer.scrollIntoView({ behavior: 'smooth' });
+
+                    showToast(isPremium ? 'Premium letter generated successfully!' : 'Free letter generated successfully!', 'success');
+
+                    // Close payment modal if open
+                    if (isPremium && paymentModal) {
+                        paymentModal.classList.add('hidden');
                     }
                 } else {
-                    alert('Error generating letter: ' + data.error);
+                    throw new Error(data.error || 'Failed to generate letter');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred while generating the letter.');
+                showToast('Failed to generate letter. Please try again.', 'error');
             })
             .finally(() => {
-                if (isPremium) {
-                    submitPaymentBtn.disabled = false;
-                    submitPaymentBtn.textContent = 'Pay $4.99';
-                } else {
-                    generateFreeBtn.disabled = false;
-                    generateFreeBtn.textContent = 'Generate Free Letter';
-                }
+                button.disabled = false;
+                button.textContent = originalText;
             });
     }
+
+    // Generate free letter
+    generateFreeBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+
+        if (!validateForm(false)) {
+            return;
+        }
+
+        const formData = collectFormData(false);
+        generateLetter(formData, false);
+    });
+
+    // Generate premium letter - show payment modal
+    generatePremiumBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+
+        if (!validateForm(true)) {
+            return;
+        }
+
+        // Show payment modal
+        paymentModal.classList.remove('hidden');
+        initializePayment();
+    });
 
     // Initialize Stripe payment
     async function initializePayment() {
@@ -290,6 +261,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                body: JSON.stringify({ amount: 499 }) // $4.99
             });
 
             if (!response.ok) {
@@ -311,92 +283,129 @@ document.addEventListener('DOMContentLoaded', function () {
             elements = stripe.elements({
                 clientSecret: data.clientSecret,
                 appearance: {
-                    theme: 'stripe'
+                    theme: 'stripe' // Use Stripe's default theme
                 }
             });
 
-            const paymentElement = elements.create('payment', {
-                layout: 'tabs'
+            paymentElement = elements.create('payment', {
+                layout: 'tabs' // Or 'accordion'
             });
 
-            // Wait a bit before mounting to ensure DOM is ready
+            // Wait a bit before mounting to ensure DOM is ready and element is available
             setTimeout(() => {
                 paymentElement.mount('#paymentElement');
             }, 100);
 
-            // Handle form submission - remove any existing listeners first
-            const newSubmitBtn = submitPaymentBtn.cloneNode(true);
-            submitPaymentBtn.parentNode.replaceChild(newSubmitBtn, submitPaymentBtn);
-            submitPaymentBtn = newSubmitBtn; // Update global reference
+            // Handle form submission - we attach the listener to the button provided by the modal
+            // The original logic to clone and replace the button is complex and might not be needed if we handle it correctly here.
+            // We'll re-use the global submitPaymentBtn reference.
 
-            newSubmitBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-
-                newSubmitBtn.disabled = true;
-                newSubmitBtn.textContent = 'Processing...';
-
-                try {
-                    const { error } = await stripe.confirmPayment({
-                        elements,
-                        confirmParams: {
-                            return_url: window.location.href.split('?')[0],
-                        },
-                        redirect: 'if_required'
-                    });
-
-                    if (error) {
-                        throw new Error(error.message);
-                    } else {
-                        // Payment succeeded - generate premium letter
-                        const letterData = collectFormData(true);
-                        generateLetter(letterData, true);
-                    }
-                } catch (paymentError) {
-                    console.error('Payment error:', paymentError);
-                    alert('Payment failed: ' + paymentError.message);
-                    newSubmitBtn.disabled = false;
-                    newSubmitBtn.textContent = 'Pay $4.99';
-                }
-            });
         } catch (error) {
             console.error('Error initializing payment:', error);
-            alert('Error setting up payment: ' + error.message + '. Please try again.');
+            showToast('Payment initialization failed: ' + error.message, 'error');
         }
     }
 
-    // Toast notification functions
-    function showSuccessToast(message) {
-        showToast(message, 'success');
-    }
+    // Handle payment submission
+    submitPaymentBtn.addEventListener('click', async function (e) {
+        e.preventDefault();
 
-    function showErrorToast(message) {
-        showToast(message, 'error');
-    }
-
-    function showToast(message, type) {
-        // Remove existing toast
-        const existingToast = document.querySelector('.toast');
-        if (existingToast) {
-            existingToast.remove();
+        if (!elements || !paymentElement) {
+            showToast('Payment not initialized', 'error');
+            return;
         }
 
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.textContent = message;
+        // Show payment loader
+        paymentLoader.classList.remove('hidden');
+        submitPaymentBtn.disabled = true; // Disable button while processing
+        submitPaymentBtn.textContent = 'Processing...';
 
-        // Add to body
-        document.body.appendChild(toast);
+        try {
+            const { error } = await stripe.confirmPayment({
+                elements,
+                confirmParams: {
+                    return_url: window.location.origin + '/payment_success.html', // A success page to redirect to
+                },
+                redirect: 'if_required' // Redirect if necessary, otherwise process in the same page
+            });
 
-        // Show toast
-        setTimeout(() => toast.classList.add('show'), 100);
+            if (error) {
+                // Show the error message to the user
+                throw new Error(error.message);
+            } else {
+                // Payment successful - generate premium letter
+                const letterData = collectFormData(true);
+                generateLetter(letterData, true);
+            }
+        } catch (paymentError) {
+            console.error('Payment error:', paymentError);
+            showToast('Payment failed: ' + paymentError.message, 'error');
+        } finally {
+            // Hide payment loader and re-enable button only if generation failed or payment itself failed
+            // If letter generation is successful, it handles button state itself.
+            if (paymentLoader) paymentLoader.classList.add('hidden');
+            if (submitPaymentBtn && !paymentLoader.classList.contains('hidden')) { // Only reset if generation didn't happen.
+                submitPaymentBtn.disabled = false;
+                submitPaymentBtn.textContent = 'Pay $4.99';
+            }
+        }
+    });
 
-        // Hide toast after 5 seconds
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 300);
-        }, 5000);
-    }
+
+    // Copy letter to clipboard
+    copyLetterBtn.addEventListener('click', function () {
+        const letterText = generatedLetter.textContent;
+
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(letterText)
+                .then(() => {
+                    showToast('Letter copied to clipboard!', 'success');
+                    copyLetterBtn.textContent = '✅ Copied!';
+                    setTimeout(() => {
+                        copyLetterBtn.innerHTML = '📋 Copy Letter';
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                    showToast('Failed to copy letter', 'error');
+                });
+        } else {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = letterText;
+            textArea.style.position = 'fixed'; // Prevent scrolling
+            textArea.style.left = '-9999px'; // Move off-screen
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                document.execCommand('copy');
+                showToast('Letter copied to clipboard!', 'success');
+                copyLetterBtn.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    copyLetterBtn.innerHTML = '📋 Copy Letter';
+                }, 2000);
+            } catch (err) {
+                console.error('Fallback copy failed: ', err);
+                showToast('Failed to copy letter', 'error');
+            }
+
+            document.body.removeChild(textArea);
+        }
+    });
+
+    // Modal close handlers
+    closeModal.addEventListener('click', function () {
+        paymentModal.classList.add('hidden');
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', function (event) {
+        if (event.target === paymentModal) {
+            paymentModal.classList.add('hidden');
+        }
+    });
 
     // PDF Download function
     window.downloadPDF = function () {
@@ -406,31 +415,34 @@ document.addEventListener('DOMContentLoaded', function () {
         // Show loading state
         downloadBtn.disabled = true;
         downloadBtn.textContent = '⏳ Generating PDF...';
+        showToast('Generating PDF...', 'info');
 
-        const formData = new FormData(refundForm);
-        const data = Object.fromEntries(formData.entries());
-        data.letter = generatedLetter.textContent;
+        const formData = collectFormData(true); // Collect premium data
+        const letterText = generatedLetter.textContent;
 
         fetch('generate_pdf.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify({
+                fullName: formData.fullName,
+                email: formData.email, // Include email for context if needed by backend
+                letter: letterText
+            })
         })
             .then(response => {
                 if (!response.ok) {
+                    // Attempt to get error message from response body
                     return response.text().then(text => {
-                        throw new Error(`Server error: ${text}`);
+                        throw new Error(`PDF generation failed: ${text || response.statusText}`);
                     });
                 }
-
-                // Check content type
+                // Check content type to ensure it's a PDF
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/pdf')) {
                     throw new Error('Invalid response format - not a PDF file');
                 }
-
                 return response.blob();
             })
             .then(blob => {
@@ -438,28 +450,25 @@ document.addEventListener('DOMContentLoaded', function () {
                     throw new Error('PDF file is empty');
                 }
 
-                // Create download link with better compatibility for IDM
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                a.download = 'premium_refund_letter_' + new Date().toISOString().split('T')[0] + '.pdf';
-                a.target = '_blank';
-
+                a.download = `premium_refund_letter_${new Date().toISOString().split('T')[0]}.pdf`;
                 document.body.appendChild(a);
                 a.click();
 
-                // Clean up after a delay to ensure download starts
+                // Clean up blob URL and element
                 setTimeout(() => {
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
                 }, 1000);
 
-                showSuccessToast('✅ PDF download started successfully!');
+                showToast('PDF downloaded successfully!', 'success');
             })
             .catch(error => {
-                console.error('Error downloading PDF:', error);
-                showErrorToast('❌ PDF download failed: ' + error.message + '. Please try again.');
+                console.error('PDF download error:', error);
+                showToast('Failed to download PDF: ' + error.message, 'error');
             })
             .finally(() => {
                 // Reset button state
@@ -473,7 +482,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const shareBtn = document.getElementById('shareEmail');
         const originalText = shareBtn.textContent;
 
-        // Create email sharing modal
+        // Create email sharing modal directly within the scope
         const modal = document.createElement('div');
         modal.className = 'modal email-share-modal';
         modal.innerHTML = `
@@ -493,8 +502,12 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.appendChild(modal);
         modal.classList.add('show');
 
-        // Close modal functionality
+        // Local variables for modal elements
         const closeBtn = modal.querySelector('.share-close');
+        const sendBtn = modal.querySelector('#sendEmailBtn');
+        const emailInput = modal.querySelector('#shareEmailInput');
+
+        // Close modal functionality
         closeBtn.onclick = () => {
             modal.classList.remove('show');
             setTimeout(() => document.body.removeChild(modal), 300);
@@ -509,51 +522,54 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         // Send email functionality
-        const sendBtn = modal.querySelector('#sendEmailBtn');
-        const emailInput = modal.querySelector('#shareEmailInput');
-
         sendBtn.onclick = () => {
             const email = emailInput.value.trim();
 
             if (!email) {
-                showErrorToast('❌ Please enter an email address');
+                showToast('❌ Please enter an email address', 'error');
                 return;
             }
 
-            if (!email.includes('@') || !email.includes('.')) {
-                showErrorToast('❌ Please enter a valid email address');
+            // Basic email format validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showToast('❌ Please enter a valid email address', 'error');
                 return;
             }
 
             // Show loading
             sendBtn.disabled = true;
             sendBtn.textContent = '📤 Sending...';
+            showToast('Sending email...', 'info');
 
-            const formData = new FormData(refundForm);
-            const data = Object.fromEntries(formData.entries());
-            data.letter = generatedLetter.textContent;
-            data.shareEmail = email;
+            const formData = collectFormData(true); // Collect premium data
+            const letterText = generatedLetter.textContent;
 
             fetch('share_email.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(data)
+                body: JSON.stringify({
+                    fullName: formData.fullName,
+                    email: formData.email, // Original email from form
+                    shareEmail: email,     // New email to share with
+                    letter: letterText
+                })
             })
                 .then(response => response.json())
                 .then(result => {
                     if (result.success) {
-                        showSuccessToast('✅ Premium letter sent successfully to ' + email);
+                        showToast('✅ Premium letter sent successfully to ' + email, 'success');
                         modal.classList.remove('show');
                         setTimeout(() => document.body.removeChild(modal), 300);
                     } else {
-                        showErrorToast('❌ Failed to send email: ' + result.error);
+                        throw new Error(result.error || 'Failed to send email');
                     }
                 })
                 .catch(error => {
                     console.error('Email sharing error:', error);
-                    showErrorToast('❌ Failed to send email. Please try again.');
+                    showToast('❌ Failed to send email: ' + error.message, 'error');
                 })
                 .finally(() => {
                     sendBtn.disabled = false;
@@ -564,4 +580,30 @@ document.addEventListener('DOMContentLoaded', function () {
         // Focus on email input
         emailInput.focus();
     };
+
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
+
+    // Initial service type display based on current value
+    const initialServiceType = serviceTypeSelect.value;
+    if (initialServiceType === 'Airline') {
+        airlineFields.classList.remove('hidden');
+        document.getElementById('flightDate').required = true;
+        document.getElementById('checkinDate').required = false;
+    } else if (initialServiceType === 'Hotel') {
+        hotelFields.classList.remove('hidden');
+        document.getElementById('checkinDate').required = true;
+        document.getElementById('flightDate').required = false;
+    }
 });
